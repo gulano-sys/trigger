@@ -204,9 +204,10 @@ const AIChatSection: React.FC = () => {
     useEffect(() => {
         const loadSessions = async () => {
             try {
-                const response = await fetch('/api/chats');
-                if (response.ok) {
-                    const data = await response.json();
+                // Carregar do localStorage
+                const saved = localStorage.getItem('zero_chats');
+                if (saved) {
+                    const data = JSON.parse(saved) as ChatSession[];
                     setSessions(data);
                     if (data.length > 0 && !currentSessionId) {
                         const last = data[data.length - 1];
@@ -223,6 +224,8 @@ const AIChatSection: React.FC = () => {
 
     const syncSession = async (updatedMessages: Message[], sessionId: string | null) => {
         let sid = sessionId;
+        let newSessions: ChatSession[];
+
         if (!sid) {
             sid = Date.now().toString();
             const newSession: ChatSession = {
@@ -232,12 +235,7 @@ const AIChatSection: React.FC = () => {
                 lastUpdate: Date.now()
             };
             setCurrentSessionId(sid);
-            setSessions(prev => [newSession, ...prev.filter(s => s.id !== sid)]);
-            await fetch('/api/chats', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(newSession)
-            });
+            newSessions = [newSession, ...sessions.filter(s => s.id !== sid)];
         } else {
             const currentSession = sessions.find(s => s.id === sid);
             const updatedSession = {
@@ -246,13 +244,12 @@ const AIChatSection: React.FC = () => {
                 messages: updatedMessages,
                 lastUpdate: Date.now()
             };
-            setSessions(prev => [updatedSession, ...prev.filter(s => s.id !== sid)]);
-            await fetch('/api/chats', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(updatedSession)
-            });
+            newSessions = [updatedSession, ...sessions.filter(s => s.id !== sid)];
         }
+
+        setSessions(newSessions);
+        // Salvar no localStorage
+        localStorage.setItem('zero_chats', JSON.stringify(newSessions));
     };
 
     const handleNewChat = () => {
@@ -274,13 +271,14 @@ const AIChatSection: React.FC = () => {
         if (!deletingId) return;
         const id = deletingId;
         setDeletingId(null);
+
         try {
-            const response = await fetch(`/api/chats/${id}`, { method: 'DELETE' });
-            if (response.ok) {
-                setSessions(prev => prev.filter(s => s.id !== id));
-                if (currentSessionId === id) handleNewChat();
-                toast.success("Arquivo removido.");
-            }
+            const newSessions = sessions.filter(s => s.id !== id);
+            setSessions(newSessions);
+            localStorage.setItem('zero_chats', JSON.stringify(newSessions));
+
+            if (currentSessionId === id) handleNewChat();
+            toast.success("Arquivo removido.");
         } catch (error) {
             toast.error("Erro ao excluir sessão.");
         }
